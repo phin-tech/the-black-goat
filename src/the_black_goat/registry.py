@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Mapping
 
 import pluggy
@@ -88,38 +89,55 @@ class Registry:
         return str(result["task_id"])
 
     def invoke(self, qualified_name: str, params: dict) -> dict:
-        """Run a sync atom in-process. Raises:
+        """Run a tool to completion and return its output dict.
+
+        Atoms run in-process. Durable tools spawn via absurd and block
+        until the run reaches a terminal state.
+
+        Raises:
         - ToolNotFound if `qualified_name` is unknown.
         - ToolKindMismatch if the tool is async (use ainvoke).
+        - RuntimeError if a durable run ends in a non-completed state.
         """
         record = self.get(qualified_name)
-        if record.is_async:
+        if record.is_async and record.durability is None:
             raise ToolKindMismatch(
                 f"tool {qualified_name!r} is async; use ainvoke() instead"
             )
         if record.durability is not None:
-            # Slice K replaces this with absurd spawn + await.
-            raise NotImplementedError(
-                f"durable tool {qualified_name!r} dispatch via absurd is "
-                "not yet implemented (Slice K)"
-            )
+            task_id = self.enqueue(qualified_name, params)
+            snapshot = self._absurd.await_task_result(task_id)
+            return self._unwrap_durable_snapshot(qualified_name, snapshot)
         return self._invoke_in_process(record, params)
 
     async def ainvoke(self, qualified_name: str, params: dict) -> dict:
-        """Run an atom in-process from an async context. Accepts both
-        sync and async tools (sync ones run inline; we are not in a
-        thread-safe-only context).
+        """Run a tool to completion from an async context. Accepts both
+        sync and async tools.
 
-        Raises ToolNotFound for unknown names.
+        Atoms run in-process. Durable tools spawn via absurd; awaiting
+        the result is offloaded to a thread so the event loop is not
+        blocked.
+
+        Raises ToolNotFound for unknown names; RuntimeError if a durable
+        run ends in a non-completed state.
         """
         record = self.get(qualified_name)
         if record.durability is not None:
-            # Slice K replaces this with absurd spawn + await.
-            raise NotImplementedError(
-                f"durable tool {qualified_name!r} dispatch via absurd is "
-                "not yet implemented (Slice K)"
+            task_id = self.enqueue(qualified_name, params)
+            snapshot = await asyncio.to_thread(
+                self._absurd.await_task_result, task_id
             )
+            return self._unwrap_durable_snapshot(qualified_name, snapshot)
         return await self._ainvoke_in_process(record, params)
+
+    @staticmethod
+    def _unwrap_durable_snapshot(qualified_name: str, snapshot) -> dict:
+        if snapshot.state == "completed":
+            return snapshot.result
+        raise RuntimeError(
+            f"durable tool {qualified_name!r} ended in state "
+            f"{snapshot.state!r}: failure={snapshot.failure!r}"
+        )
 
     def _invoke_in_process(self, record: ToolDef, params: dict) -> dict:
         input_obj = self._validate_input(record, params)
