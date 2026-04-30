@@ -2,6 +2,12 @@ version = 1
 revision = 3
 requires-python = ">=3.13"
 
+[manifest]
+members = [
+    "the-black-goat",
+    "the-black-goat-stdlib",
+]
+
 [[package]]
 name = "absurd-sdk"
 version = "0.3.0"
@@ -2069,6 +2075,7 @@ dev = [
     { name = "absurdctl" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "the-black-goat-stdlib" },
 ]
 
 [package.metadata]
@@ -2086,6 +2093,22 @@ dev = [
     { name = "absurdctl", specifier = ">=0.3.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
+    { name = "the-black-goat-stdlib", editable = "the-thousand-young/the-black-goat-stdlib" },
+]
+
+[[package]]
+name = "the-black-goat-stdlib"
+version = "0.1.0"
+source = { editable = "the-thousand-young/the-black-goat-stdlib" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "the-black-goat" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.13.3" },
+    { name = "the-black-goat", editable = "." },
 ]
 
 [[package]]
