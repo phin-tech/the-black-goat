@@ -54,18 +54,60 @@ class Registry:
             )
         return self._invoke_in_process(record, params)
 
-    def _invoke_in_process(self, record: ToolDef, params: dict) -> dict:
-        input_obj = record.input_schema.model_validate(params)
+    async def ainvoke(self, qualified_name: str, params: dict) -> dict:
+        """Run an atom in-process from an async context. Accepts both
+        sync and async tools (sync ones run inline; we are not in a
+        thread-safe-only context).
 
-        if record.config_schema is None:
-            result = record.func(input_obj)
+        Raises ToolNotFound for unknown names.
+        """
+        record = self.get(qualified_name)
+        if record.durability is not None:
+            # Slice K replaces this with absurd spawn + await.
+            raise NotImplementedError(
+                f"durable tool {qualified_name!r} dispatch via absurd is "
+                "not yet implemented (Slice K)"
+            )
+        return await self._ainvoke_in_process(record, params)
+
+    def _invoke_in_process(self, record: ToolDef, params: dict) -> dict:
+        input_obj = self._validate_input(record, params)
+        result = self._call_sync(record, input_obj)
+        return self._dump_output(record, result)
+
+    async def _ainvoke_in_process(self, record: ToolDef, params: dict) -> dict:
+        input_obj = self._validate_input(record, params)
+        if record.is_async:
+            result = await self._call_async(record, input_obj)
         else:
+            result = self._call_sync(record, input_obj)
+        return self._dump_output(record, result)
+
+    @staticmethod
+    def _validate_input(record: ToolDef, params: dict):
+        return record.input_schema.model_validate(params)
+
+    @staticmethod
+    def _call_sync(record: ToolDef, input_obj):
+        if record.config_schema is not None:
             # Slice G replaces this with config-source injection.
             raise NotImplementedError(
                 f"tool {record.qualified_name!r} declares config_schema; "
                 "config injection is implemented in Slice G"
             )
+        return record.func(input_obj)
 
+    @staticmethod
+    async def _call_async(record: ToolDef, input_obj):
+        if record.config_schema is not None:
+            raise NotImplementedError(
+                f"tool {record.qualified_name!r} declares config_schema; "
+                "config injection is implemented in Slice G"
+            )
+        return await record.func(input_obj)
+
+    @staticmethod
+    def _dump_output(record: ToolDef, result):
         if isinstance(result, record.output_schema):
             output = result
         else:
