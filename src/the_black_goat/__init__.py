@@ -1,5 +1,5 @@
 from the_black_goat._hookspec import hookimpl
-from the_black_goat.registry import Registry, build_registry
+from the_black_goat.registry import Registry, build_registry, current_registry
 from the_black_goat.tools import DurabilitySpec, SideEffect, ToolDef, durable, tool
 
 __all__ = [
@@ -8,6 +8,7 @@ __all__ = [
     "SideEffect",
     "ToolDef",
     "build_registry",
+    "current_registry",
     "durable",
     "hookimpl",
     "tool",

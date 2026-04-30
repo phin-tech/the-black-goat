@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Mapping
+from contextvars import ContextVar
+from typing import Any, Mapping, Optional
 
 import pluggy
 from pydantic import BaseModel
@@ -241,4 +242,28 @@ def build_registry(
 
         install_runner(absurd, registry)
 
+    _current_registry.set(registry)
     return registry
+
+
+_current_registry: ContextVar[Optional[Registry]] = ContextVar(
+    "goat_current_registry", default=None
+)
+
+
+def current_registry() -> Registry:
+    """Return the most-recently-built Registry visible in this context.
+
+    Set automatically by `build_registry()`. Programs use this to reach the
+    registry without having it threaded through every call.
+
+    Raises RuntimeError if no registry has been built yet (or if the
+    contextvar has been explicitly cleared, e.g. in tests).
+    """
+    reg = _current_registry.get()
+    if reg is None:
+        raise RuntimeError(
+            "current_registry() called with no registry set; call "
+            "build_registry() first or use the contextvar directly"
+        )
+    return reg
