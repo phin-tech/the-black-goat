@@ -263,3 +263,79 @@ class TestApplySchedulesDryRun:
 
         assert before == after  # no DB changes
         assert summary["added"] == ["goat:routine.morning"]
+
+
+class TestEndToEnd:
+    """The full pipeline: pg_cron tick -> SELECT absurd.spawn_task ->
+    worker picks up the task -> goat_run_tool dispatches to the registry
+    -> tool body runs against the real DB.
+
+    Slow: waits up to ~12 seconds for at least one pg_cron tick on a
+    "5 seconds" schedule. Skip in tight TDD loops by deselecting this
+    class with `pytest -k 'not TestEndToEnd'`.
+    """
+
+    def test_pg_cron_triggers_memory_put(
+        self, pg_url, absurd_app, background_worker, clean_cron_jobs
+    ):
+        import time
+        import uuid
+
+        from the_black_goat.config import DictConfigSource
+        import memory_plugin
+
+        ns = f"e2e_{uuid.uuid4().hex[:8]}"
+
+        sched = Schedule(
+            name="ping",
+            tool="memory.put",
+            cron="5 seconds",
+            input={
+                "namespace": ns,
+                "key": "tick",
+                "value": {"src": "pg_cron"},
+            },
+        )
+
+        class _SchedPlugin:
+            @hookimpl
+            def goat_register_tools(self) -> list[ToolDef]:
+                return []
+
+            @hookimpl
+            def goat_register_schedules(self) -> list[Schedule]:
+                return [sched]
+
+        reg = build_registry(
+            plugins={"memory": memory_plugin, "e2e": _SchedPlugin()},
+            absurd=absurd_app,
+            config_source=DictConfigSource(
+                {"memory": {"database_url": pg_url}}
+            ),
+        )
+
+        apply_schedules(reg, pg_url, queue=absurd_app._queue_name)
+
+        # Wait for at least one pg_cron tick (5s schedule + worker latency).
+        deadline = time.monotonic() + 12
+        from psycopg import Connection
+
+        seen_value = None
+        while time.monotonic() < deadline:
+            with Connection.connect(pg_url) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT value FROM goat_memory.kv "
+                        "WHERE namespace=%s AND key=%s",
+                        (ns, "tick"),
+                    )
+                    row = cur.fetchone()
+            if row is not None:
+                seen_value = row[0]
+                break
+            time.sleep(0.5)
+
+        assert seen_value == {"src": "pg_cron"}, (
+            "expected memory.put to have been triggered by pg_cron within "
+            "~12s; nothing landed"
+        )

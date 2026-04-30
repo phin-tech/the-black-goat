@@ -82,6 +82,13 @@ class TestScheduleModel:
         with pytest.raises(ValidationError):
             Schedule(name="x", tool="t.x", cron="not a cron")
 
+    def test_pg_cron_interval_syntax_accepted(self):
+        # pg_cron 1.4+ accepts "N seconds/minutes/hours/days"; the registry's
+        # validator must let these through alongside standard cron.
+        for expr in ("5 seconds", "10 minutes", "1 hour", "2 days"):
+            s = Schedule(name="x", tool="t.x", cron=expr)
+            assert s.cron == expr
+
     def test_empty_name_rejected(self):
         with pytest.raises(ValidationError):
             Schedule(name="", tool="t.x", cron="* * * * *")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
 from croniter import croniter
@@ -13,6 +14,18 @@ if TYPE_CHECKING:
 
 GOAT_JOB_PREFIX = "goat:"
 DOLLAR_TAG = "goatparams"  # dollar-quote tag for embedding JSON in cron commands
+
+# pg_cron 1.4+ accepts interval syntax in addition to standard cron, e.g.
+# "5 seconds", "10 minutes". croniter doesn't recognize this form, so we
+# allow it through a separate regex check.
+_PGCRON_INTERVAL_RE = re.compile(
+    r"^\s*\d+\s+(second|seconds|minute|minutes|hour|hours|day|days)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _is_valid_schedule_expression(value: str) -> bool:
+    return bool(croniter.is_valid(value) or _PGCRON_INTERVAL_RE.match(value))
 
 
 class Schedule(BaseModel):
@@ -35,8 +48,11 @@ class Schedule(BaseModel):
     @field_validator("cron")
     @classmethod
     def _cron_must_be_valid(cls, v: str) -> str:
-        if not croniter.is_valid(v):
-            raise ValueError(f"invalid cron expression: {v!r}")
+        if not _is_valid_schedule_expression(v):
+            raise ValueError(
+                f"invalid cron expression {v!r}: expected a 5-field cron "
+                "(e.g. '0 5 * * *') or a pg_cron interval (e.g. '5 seconds')"
+            )
         return v
 
     @computed_field
