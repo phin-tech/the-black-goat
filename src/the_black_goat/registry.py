@@ -15,6 +15,7 @@ from the_black_goat.errors import (
     ToolKindMismatch,
     ToolNotFound,
 )
+from the_black_goat.scheduling import Schedule
 from the_black_goat.tools import ToolDef
 
 
@@ -27,10 +28,12 @@ class Registry:
         *,
         absurd: Any = None,
         configs: Mapping[str, BaseModel] | None = None,
+        schedules: Mapping[str, Schedule] | None = None,
     ) -> None:
         self._tools: dict[str, ToolDef] = dict(tools)
         self._absurd = absurd
         self._configs: dict[str, BaseModel] = dict(configs or {})
+        self._schedules: dict[str, Schedule] = dict(schedules or {})
 
     def list(self) -> list[ToolDef]:
         return list(self._tools.values())
@@ -46,6 +49,15 @@ class Registry:
 
     def by_tag(self, tag: str) -> list[ToolDef]:
         return [t for t in self._tools.values() if tag in t.tags]
+
+    def schedules(self) -> list[Schedule]:
+        return list(self._schedules.values())
+
+    def schedule(self, qualified_name: str) -> Schedule:
+        return self._schedules[qualified_name]
+
+    def schedules_by_plugin(self, plugin: str) -> list[Schedule]:
+        return [s for s in self._schedules.values() if s.plugin == plugin]
 
     def __getattr__(self, name: str) -> "_PluginProxy":
         # __getattr__ only fires when normal attribute lookup fails, so
@@ -274,7 +286,29 @@ def build_registry(
                 )
             tools_by_qname[qname] = prefixed
 
-    registry = Registry(tools_by_qname, absurd=absurd, configs=configs_by_qname)
+    schedules_by_qname: dict[str, Schedule] = {}
+    for hookimpl_obj in pm.hook.goat_register_schedules.get_hookimpls():
+        plugin_name = hookimpl_obj.plugin_name
+        plugin_obj = hookimpl_obj.plugin
+        method = getattr(plugin_obj, "goat_register_schedules")
+        for sched in method():
+            prefixed_sched = sched.model_copy(update={"plugin": plugin_name})
+            sqname = prefixed_sched.qualified_name
+            if sqname in schedules_by_qname:
+                raise ValueError(f"duplicate schedule name: {sqname!r}")
+            if prefixed_sched.tool not in tools_by_qname:
+                raise ToolNotFound(
+                    f"schedule {sqname!r} references unknown tool "
+                    f"{prefixed_sched.tool!r}"
+                )
+            schedules_by_qname[sqname] = prefixed_sched
+
+    registry = Registry(
+        tools_by_qname,
+        absurd=absurd,
+        configs=configs_by_qname,
+        schedules=schedules_by_qname,
+    )
 
     if absurd is not None:
         from the_black_goat.absurd_runner import install_runner
