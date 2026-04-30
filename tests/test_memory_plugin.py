@@ -111,3 +111,46 @@ class TestMemoryPut:
             ("a", {"v": 1}),
             ("b", {"v": 2}),
         ]
+
+
+class TestMemoryGet:
+    def test_get_returns_stored_value_and_written_at(self, memory_registry, ns):
+        put_result = memory_registry.memory.put(
+            {"namespace": ns, "key": "alpha", "value": {"answer": 42}}
+        )
+        got = memory_registry.memory.get({"namespace": ns, "key": "alpha"})
+        assert got["value"] == {"answer": 42}
+        # written_at round-trips through Pydantic — it'll be an isoformat string
+        # on the dict surface; just confirm it's present and matches the put.
+        assert got["written_at"] == put_result["written_at"]
+
+    def test_get_missing_returns_none_pair(self, memory_registry, ns):
+        got = memory_registry.memory.get({"namespace": ns, "key": "absent"})
+        assert got == {"value": None, "written_at": None}
+
+    def test_get_isolated_by_namespace(self, memory_registry, ns):
+        memory_registry.memory.put(
+            {"namespace": ns, "key": "shared", "value": {"v": 1}}
+        )
+        # Same key, different namespace → should be missing.
+        other_ns = ns + "_other"
+        got = memory_registry.memory.get(
+            {"namespace": other_ns, "key": "shared"}
+        )
+        assert got["value"] is None
+
+    def test_get_validates_input(self, memory_registry, ns):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            memory_registry.memory.get({"namespace": ns, "key": ""})
+
+    def test_get_after_overwrite_returns_latest(self, memory_registry, ns):
+        memory_registry.memory.put(
+            {"namespace": ns, "key": "alpha", "value": {"v": 1}}
+        )
+        memory_registry.memory.put(
+            {"namespace": ns, "key": "alpha", "value": {"v": 2}}
+        )
+        got = memory_registry.memory.get({"namespace": ns, "key": "alpha"})
+        assert got["value"] == {"v": 2}
