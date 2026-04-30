@@ -18,6 +18,11 @@ tasks:
     cmds:
       - uv run python -c "from psycopg import Connection; conn=Connection.connect('postgresql://absurd:absurd@localhost:5432/absurd', autocommit=True); conn.cursor().execute(open('db/absurd.sql').read()); print('absurd schema applied')"
 
+  memory:init:
+    desc: Apply the goat-memory schema to the running Postgres (idempotent)
+    cmds:
+      - uv run python -c "from psycopg import Connection; conn=Connection.connect('postgresql://absurd:absurd@localhost:5432/absurd', autocommit=True); conn.cursor().execute(open('db/memory.sql').read()); print('memory schema applied')"
+
   db:down:
     desc: Stop Postgres (data preserved)
     cmds:

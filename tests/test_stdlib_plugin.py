@@ -9,12 +9,21 @@ from datetime import datetime, timezone
 import pytest
 
 from the_black_goat import build_registry
+from the_black_goat.config import DictConfigSource
 
 
 @pytest.fixture
 def registry():
-    """Build a registry against actual entry points (no plugins= override)."""
-    return build_registry()
+    """Build a registry against actual entry points (no plugins= override).
+
+    Provides a config_source so any auto-discovered plugin that requires
+    config (e.g. memory) can build. The URL only needs to validate as a
+    string here; tests in this module don't hit the DB.
+    """
+    config_source = DictConfigSource(
+        {"memory": {"database_url": "postgresql://absurd:absurd@localhost:5432/absurd"}}
+    )
+    return build_registry(config_source=config_source)
 
 
 class TestStdlibDiscovery:

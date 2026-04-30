@@ -5,6 +5,7 @@ requires-python = ">=3.13"
 [manifest]
 members = [
     "the-black-goat",
+    "the-black-goat-memory",
     "the-black-goat-stdlib",
 ]
 
@@ -2075,6 +2076,7 @@ dev = [
     { name = "absurdctl" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "the-black-goat-memory" },
     { name = "the-black-goat-stdlib" },
 ]
 
@@ -2093,7 +2095,25 @@ dev = [
     { name = "absurdctl", specifier = ">=0.3.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
+    { name = "the-black-goat-memory", editable = "the-thousand-young/the-black-goat-memory" },
     { name = "the-black-goat-stdlib", editable = "the-thousand-young/the-black-goat-stdlib" },
+]
+
+[[package]]
+name = "the-black-goat-memory"
+version = "0.1.0"
+source = { editable = "the-thousand-young/the-black-goat-memory" }
+dependencies = [
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic" },
+    { name = "the-black-goat" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.0.0" },
+    { name = "pydantic", specifier = ">=2.13.3" },
+    { name = "the-black-goat", editable = "." },
 ]
 
 [[package]]
