@@ -45,6 +45,48 @@ class Registry:
     def by_tag(self, tag: str) -> list[ToolDef]:
         return [t for t in self._tools.values() if tag in t.tags]
 
+    def enqueue(self, qualified_name: str, params: dict) -> str:
+        """Spawn the tool as an absurd task and return the task_id.
+
+        Always uses absurd, regardless of `durability`. Atoms get a one-shot
+        spawn with default options; durables use their `DurabilitySpec`.
+        Input is validated up-front so callers fail fast rather than in a
+        worker.
+
+        Raises:
+        - AbsurdNotConfigured if no absurd client was provided.
+        - ToolNotFound if the name is not registered.
+        - pydantic.ValidationError on bad input.
+        """
+        if self._absurd is None:
+            raise AbsurdNotConfigured(
+                "registry.enqueue() requires an absurd client; pass "
+                "absurd= to build_registry()"
+            )
+        record = self.get(qualified_name)
+        input_obj = self._validate_input(record, params)
+        validated_params = input_obj.model_dump()
+
+        spawn_kwargs: dict[str, Any] = {}
+        if record.durability is not None:
+            d = record.durability
+            if d.max_attempts is not None:
+                spawn_kwargs["max_attempts"] = d.max_attempts
+            if d.retry_strategy is not None:
+                spawn_kwargs["retry_strategy"] = d.retry_strategy
+            if d.cancellation is not None:
+                spawn_kwargs["cancellation"] = d.cancellation
+            spawn_kwargs["queue"] = d.queue
+
+        from the_black_goat.absurd_runner import GOAT_RUN_TOOL_NAME
+
+        result = self._absurd.spawn(
+            GOAT_RUN_TOOL_NAME,
+            {"tool": qualified_name, "input": validated_params},
+            **spawn_kwargs,
+        )
+        return str(result["task_id"])
+
     def invoke(self, qualified_name: str, params: dict) -> dict:
         """Run a sync atom in-process. Raises:
         - ToolNotFound if `qualified_name` is unknown.
@@ -174,4 +216,11 @@ def build_registry(
                 )
             tools_by_qname[qname] = prefixed
 
-    return Registry(tools_by_qname, absurd=absurd, configs=configs_by_qname)
+    registry = Registry(tools_by_qname, absurd=absurd, configs=configs_by_qname)
+
+    if absurd is not None:
+        from the_black_goat.absurd_runner import install_runner
+
+        install_runner(absurd, registry)
+
+    return registry

@@ -167,12 +167,20 @@ class TestAbsurdGate:
         assert reg.get("slack.send").durability is None
 
     def test_durable_tool_with_absurd_is_fine(self):
-        # Sentinel; Slice D doesn't dispatch via absurd, just gates the build.
-        absurd_sentinel = object()
+        # build_registry registers `goat_run_tool` on the absurd app, so
+        # the sentinel must implement enough of the absurd protocol for
+        # install_runner to attach. We never spawn through it here.
+        class _FakeAbsurd:
+            def register_task(self, *, name):
+                def _decorator(fn):
+                    return fn
+
+                return _decorator
+
         atom = _atom("send")
         wrapped = durable(atom, max_attempts=3)
         reg = build_registry(
             plugins={"slack": _plugin(wrapped)},
-            absurd=absurd_sentinel,
+            absurd=_FakeAbsurd(),
         )
         assert reg.get("slack.send").durability is not None

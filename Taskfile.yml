@@ -13,6 +13,11 @@ tasks:
     cmds:
       - docker compose up -d --wait
 
+  db:init:
+    desc: Apply absurd's schema to the running Postgres (safe to re-run; idempotent)
+    cmds:
+      - uv run python -c "from psycopg import Connection; conn=Connection.connect('postgresql://absurd:absurd@localhost:5432/absurd', autocommit=True); conn.cursor().execute(open('db/absurd.sql').read()); print('absurd schema applied')"
+
   db:down:
     desc: Stop Postgres (data preserved)
     cmds:
