@@ -45,6 +45,11 @@ tasks:
     cmds:
       - docker compose logs -f postgres
 
+  schedules:apply:
+    desc: Reconcile pg_cron's cron.job table with registered Schedules
+    cmds:
+      - uv run python -m the_black_goat.scheduling apply
+
   test:
     desc: Run the test suite (pass extra args after `--`)
     cmds:
