@@ -23,6 +23,29 @@ Contrast with openclaw / nano-claw: those are agent-first. We are program-first 
 3. **Functional core / imperative shell.** Pure functions in the middle. I/O, side effects, and orchestration at the edges. Extend this to module boundaries: pure decision logic separate from durable-execution wiring.
 4. **Straightforward human interfaces.** Communication with humans (Twilio, Slack, email) happens through tool-shaped interfaces. Keep them small and obvious.
 
+## Running commands
+
+**Always use `uv run` to execute Python.** Never call `python` / `python3` / `pytest` / project scripts directly — they will use a different interpreter or miss project dependencies.
+
+- Run a script: `uv run python -c "..."` or `uv run script.py`
+- Run tests: `uv run pytest` (or `task test`)
+- Run the CLI entrypoint: `uv run the-black-goat`
+- Add a dependency: `uv add <pkg>` (not `pip install`)
+- Add a dev dependency: `uv add --dev <pkg>`
+
+Anything that needs a Python interpreter or project deps goes through `uv run`. If a command fails because something isn't installed, the fix is `uv add`, not falling back to system Python.
+
+### Common workflows go through `task`
+
+Repeated multi-step commands belong in `Taskfile.yml` and are run via `task <name>`. Don't paste raw `docker compose ...` invocations into the transcript when a task already wraps it.
+
+- `task` — list everything available
+- `task db:up` / `task db:down` / `task db:reset` — Postgres lifecycle
+- `task db:psql` / `task db:logs` — inspect the running database
+- `task test` — run pytest (extra args after `--`, e.g. `task test -- -k foo`)
+
+If you type the same multi-step command twice, add it to `Taskfile.yml`.
+
 ## The One Rule
 
 **Reality doesn't care about your model. The gap between model and reality is where all failures live.**

@@ -1,0 +1,41 @@
+# https://taskfile.dev
+version: '3'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list-all
+    silent: true
+
+  db:up:
+    desc: Start Postgres and wait for healthcheck
+    cmds:
+      - docker compose up -d --wait
+
+  db:down:
+    desc: Stop Postgres (data preserved)
+    cmds:
+      - docker compose down
+
+  db:reset:
+    desc: Stop Postgres and wipe its data volume
+    prompt: This destroys all data in the Postgres volume. Continue?
+    cmds:
+      - docker compose down -v
+
+  db:psql:
+    desc: Open psql in the running Postgres container
+    interactive: true
+    cmds:
+      - docker compose exec postgres psql -U absurd -d absurd
+
+  db:logs:
+    desc: Tail Postgres logs
+    cmds:
+      - docker compose logs -f postgres
+
+  test:
+    desc: Run the test suite (pass extra args after `--`)
+    cmds:
+      - uv run pytest {{.CLI_ARGS}}
