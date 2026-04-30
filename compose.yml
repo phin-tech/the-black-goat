@@ -4,17 +4,28 @@
 
 services:
   postgres:
-    image: postgres:17-alpine
+    build:
+      context: ./docker/postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: absurd
       POSTGRES_USER: absurd
       POSTGRES_PASSWORD: absurd
+    # pg_cron requires shared_preload_libraries to be set BEFORE postgres
+    # starts; cron.database_name selects the database that owns the
+    # cron.job table.
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_preload_libraries=pg_cron"
+      - "-c"
+      - "cron.database_name=absurd"
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      # Auto-applies absurd.sql when the data volume is first created.
+      # Auto-applies *.sql in db/ (alphabetical) when the data volume is
+      # first created: absurd, memory, pg_cron init.
       - ./db:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U absurd -d absurd"]
