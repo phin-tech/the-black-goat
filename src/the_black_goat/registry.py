@@ -3,9 +3,16 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 import pluggy
+from pydantic import BaseModel
 
 from the_black_goat._hookspec import PROJECT_NAME, GoatHooks
-from the_black_goat.errors import AbsurdNotConfigured, ToolKindMismatch, ToolNotFound
+from the_black_goat.config import ConfigSource
+from the_black_goat.errors import (
+    AbsurdNotConfigured,
+    ConfigError,
+    ToolKindMismatch,
+    ToolNotFound,
+)
 from the_black_goat.tools import ToolDef
 
 
@@ -17,9 +24,11 @@ class Registry:
         tools: Mapping[str, ToolDef],
         *,
         absurd: Any = None,
+        configs: Mapping[str, BaseModel] | None = None,
     ) -> None:
         self._tools: dict[str, ToolDef] = dict(tools)
         self._absurd = absurd
+        self._configs: dict[str, BaseModel] = dict(configs or {})
 
     def list(self) -> list[ToolDef]:
         return list(self._tools.values())
@@ -87,24 +96,17 @@ class Registry:
     def _validate_input(record: ToolDef, params: dict):
         return record.input_schema.model_validate(params)
 
-    @staticmethod
-    def _call_sync(record: ToolDef, input_obj):
-        if record.config_schema is not None:
-            # Slice G replaces this with config-source injection.
-            raise NotImplementedError(
-                f"tool {record.qualified_name!r} declares config_schema; "
-                "config injection is implemented in Slice G"
-            )
-        return record.func(input_obj)
+    def _call_sync(self, record: ToolDef, input_obj):
+        if record.config_schema is None:
+            return record.func(input_obj)
+        config = self._configs[record.qualified_name]
+        return record.func(input_obj, config=config)
 
-    @staticmethod
-    async def _call_async(record: ToolDef, input_obj):
-        if record.config_schema is not None:
-            raise NotImplementedError(
-                f"tool {record.qualified_name!r} declares config_schema; "
-                "config injection is implemented in Slice G"
-            )
-        return await record.func(input_obj)
+    async def _call_async(self, record: ToolDef, input_obj):
+        if record.config_schema is None:
+            return await record.func(input_obj)
+        config = self._configs[record.qualified_name]
+        return await record.func(input_obj, config=config)
 
     @staticmethod
     def _dump_output(record: ToolDef, result):
@@ -118,7 +120,7 @@ class Registry:
 def build_registry(
     plugins: Mapping[str, Any] | None = None,
     *,
-    config_source: Any = None,
+    config_source: ConfigSource | None = None,
     absurd: Any = None,
 ) -> Registry:
     """Build a Registry by aggregating ToolDefs from plugins.
@@ -127,6 +129,13 @@ def build_registry(
     entry points (group: "the_black_goat"). Otherwise, `plugins` is a
     mapping of plugin_name -> plugin_object; each is registered under
     that name and its tools are prefixed with it.
+
+    Tools that declare a `config_schema` have their config resolved at
+    build time via `config_source`. A missing source or unresolvable
+    config raises `ConfigError` immediately, never at call time.
+
+    Tools with a populated `durability` require `absurd` to be provided
+    (see Slices J/K).
     """
     pm = pluggy.PluginManager(PROJECT_NAME)
     pm.add_hookspecs(GoatHooks)
@@ -138,6 +147,8 @@ def build_registry(
         pm.load_setuptools_entrypoints(PROJECT_NAME)
 
     tools_by_qname: dict[str, ToolDef] = {}
+    configs_by_qname: dict[str, BaseModel] = {}
+
     for hookimpl_obj in pm.hook.goat_register_tools.get_hookimpls():
         plugin_name = hookimpl_obj.plugin_name
         plugin_obj = hookimpl_obj.plugin
@@ -152,6 +163,15 @@ def build_registry(
                     f"tool {qname!r} is durable but no absurd= was "
                     "provided to build_registry()"
                 )
+            if prefixed.config_schema is not None:
+                if config_source is None:
+                    raise ConfigError(
+                        f"tool {qname!r} declares config_schema but no "
+                        "config_source= was provided to build_registry()"
+                    )
+                configs_by_qname[qname] = config_source.resolve(
+                    plugin_name, prefixed.config_schema
+                )
             tools_by_qname[qname] = prefixed
 
-    return Registry(tools_by_qname, absurd=absurd)
+    return Registry(tools_by_qname, absurd=absurd, configs=configs_by_qname)

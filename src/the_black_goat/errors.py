@@ -16,3 +16,7 @@ class AbsurdNotConfigured(GoatError):
 class ToolKindMismatch(GoatError):
     """Raised when invoke() is called on an async tool, or ainvoke() on
     something that can't be awaited as expected for the call kind."""
+
+
+class ConfigError(GoatError):
+    """Raised when a tool's config cannot be resolved or fails validation."""
