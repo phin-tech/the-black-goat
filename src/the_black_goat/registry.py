@@ -47,6 +47,15 @@ class Registry:
     def by_tag(self, tag: str) -> list[ToolDef]:
         return [t for t in self._tools.values() if tag in t.tags]
 
+    def __getattr__(self, name: str) -> "_PluginProxy":
+        # __getattr__ only fires when normal attribute lookup fails, so
+        # existing methods/attributes (list, get, invoke, _tools, _absurd,
+        # ...) keep their semantics. Reject underscore names so a mistyped
+        # private attribute doesn't silently masquerade as a plugin.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return _PluginProxy(self, name)
+
     def enqueue(self, qualified_name: str, params: dict) -> str:
         """Spawn the tool as an absurd task and return the task_id.
 
@@ -176,6 +185,36 @@ class Registry:
         else:
             output = record.output_schema.model_validate(result)
         return output.model_dump()
+
+
+class _PluginProxy:
+    """Returned by `Registry.__getattr__("plugin_name")`. Each attribute
+    access returns a callable that goes through `registry.invoke(qname, ...)`.
+
+    Accepts either a Pydantic input model or a plain dict at the call site.
+    Tool lookup is late-bound: a missing tool surfaces as `ToolNotFound`
+    when the call is made, not when the attribute is accessed.
+    """
+
+    __slots__ = ("_registry", "_plugin")
+
+    def __init__(self, registry: "Registry", plugin: str) -> None:
+        self._registry = registry
+        self._plugin = plugin
+
+    def __getattr__(self, tool_name: str):
+        if tool_name.startswith("_"):
+            raise AttributeError(tool_name)
+        registry = self._registry
+        qname = f"{self._plugin}.{tool_name}"
+
+        def _call(args):
+            payload = args.model_dump() if isinstance(args, BaseModel) else args
+            return registry.invoke(qname, payload)
+
+        _call.__name__ = qname
+        _call.__qualname__ = qname
+        return _call
 
 
 def build_registry(
