@@ -26,7 +26,18 @@ _GET = tool(
     tags=("memory", "kv"),
 )
 
+_LIST = tool(
+    name="list",
+    func=_tools.list_,
+    input=_tools.MemoryListInput,
+    output=_tools.MemoryListOutput,
+    config=_tools.MemoryConfig,
+    is_idempotent=True,
+    side_effect="reads_external",
+    tags=("memory", "kv"),
+)
+
 
 @hookimpl
 def goat_register_tools() -> list[ToolDef]:
-    return [_PUT, _GET]
+    return [_PUT, _GET, _LIST]

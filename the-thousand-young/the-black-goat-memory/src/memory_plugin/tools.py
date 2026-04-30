@@ -75,3 +75,49 @@ def get(input: MemoryGetInput, *, config: MemoryConfig) -> MemoryGetOutput:
         return MemoryGetOutput()
     value, written_at = row
     return MemoryGetOutput(value=value, written_at=written_at)
+
+
+# ---------- list ----------
+
+
+class MemoryListInput(BaseModel):
+    namespace: str = Field(min_length=1)
+    since: datetime | None = None
+    limit: int = Field(default=100, ge=1, le=10_000)
+
+
+class MemoryListItem(BaseModel):
+    key: str
+    value: dict[str, Any]
+    written_at: datetime
+
+
+class MemoryListOutput(BaseModel):
+    items: list[MemoryListItem]
+
+
+def list_(input: MemoryListInput, *, config: MemoryConfig) -> MemoryListOutput:
+    """Most-recent-first listing within a namespace, optionally since a cutoff."""
+    with Connection.connect(config.database_url.get_secret_value()) as conn:
+        with conn.cursor() as cur:
+            if input.since is None:
+                cur.execute(
+                    "SELECT key, value, written_at FROM goat_memory.kv "
+                    "WHERE namespace = %s "
+                    "ORDER BY written_at DESC "
+                    "LIMIT %s",
+                    (input.namespace, input.limit),
+                )
+            else:
+                cur.execute(
+                    "SELECT key, value, written_at FROM goat_memory.kv "
+                    "WHERE namespace = %s AND written_at >= %s "
+                    "ORDER BY written_at DESC "
+                    "LIMIT %s",
+                    (input.namespace, input.since, input.limit),
+                )
+            rows = cur.fetchall()
+    items = [
+        MemoryListItem(key=k, value=v, written_at=w) for (k, v, w) in rows
+    ]
+    return MemoryListOutput(items=items)
