@@ -5,7 +5,7 @@ from typing import Any, Mapping
 import pluggy
 
 from the_black_goat._hookspec import PROJECT_NAME, GoatHooks
-from the_black_goat.errors import AbsurdNotConfigured, ToolNotFound
+from the_black_goat.errors import AbsurdNotConfigured, ToolKindMismatch, ToolNotFound
 from the_black_goat.tools import ToolDef
 
 
@@ -35,6 +35,42 @@ class Registry:
 
     def by_tag(self, tag: str) -> list[ToolDef]:
         return [t for t in self._tools.values() if tag in t.tags]
+
+    def invoke(self, qualified_name: str, params: dict) -> dict:
+        """Run a sync atom in-process. Raises:
+        - ToolNotFound if `qualified_name` is unknown.
+        - ToolKindMismatch if the tool is async (use ainvoke).
+        """
+        record = self.get(qualified_name)
+        if record.is_async:
+            raise ToolKindMismatch(
+                f"tool {qualified_name!r} is async; use ainvoke() instead"
+            )
+        if record.durability is not None:
+            # Slice K replaces this with absurd spawn + await.
+            raise NotImplementedError(
+                f"durable tool {qualified_name!r} dispatch via absurd is "
+                "not yet implemented (Slice K)"
+            )
+        return self._invoke_in_process(record, params)
+
+    def _invoke_in_process(self, record: ToolDef, params: dict) -> dict:
+        input_obj = record.input_schema.model_validate(params)
+
+        if record.config_schema is None:
+            result = record.func(input_obj)
+        else:
+            # Slice G replaces this with config-source injection.
+            raise NotImplementedError(
+                f"tool {record.qualified_name!r} declares config_schema; "
+                "config injection is implemented in Slice G"
+            )
+
+        if isinstance(result, record.output_schema):
+            output = result
+        else:
+            output = record.output_schema.model_validate(result)
+        return output.model_dump()
 
 
 def build_registry(

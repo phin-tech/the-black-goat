@@ -11,3 +11,8 @@ class ToolNotFound(GoatError):
 
 class AbsurdNotConfigured(GoatError):
     """Raised when a durable tool is registered without an absurd client."""
+
+
+class ToolKindMismatch(GoatError):
+    """Raised when invoke() is called on an async tool, or ainvoke() on
+    something that can't be awaited as expected for the call kind."""
