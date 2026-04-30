@@ -75,3 +75,28 @@ def tool(
         requires_confirmation=requires_confirmation,
         tags=tuple(tags),
     )
+
+
+def durable(
+    inner: ToolDef,
+    *,
+    retry_strategy: RetryStrategy | None = None,
+    max_attempts: int | None = None,
+    queue: str = "default",
+    cancellation: CancellationPolicy | None = None,
+) -> ToolDef:
+    """Wrap an atom ToolDef with durability metadata.
+
+    Returns a new ToolDef sharing the inner's name, schemas, func, and
+    metadata, with `durability` populated. Raises ValueError if `inner`
+    already has durability set.
+    """
+    if inner.durability is not None:
+        raise ValueError(f"tool {inner.name!r} is already durable; cannot re-wrap")
+    spec = DurabilitySpec(
+        retry_strategy=retry_strategy,
+        max_attempts=max_attempts,
+        queue=queue,
+        cancellation=cancellation,
+    )
+    return inner.model_copy(update={"durability": spec})
