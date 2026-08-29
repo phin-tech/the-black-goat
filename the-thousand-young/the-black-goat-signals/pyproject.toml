@@ -1,0 +1,23 @@
+[project]
+name = "the-black-goat-signals"
+version = "0.1.0"
+description = "Signal generation runner for the-black-goat."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "the-black-goat",
+    "pydantic>=2.13.3",
+]
+
+[project.entry-points."the_black_goat"]
+signals = "signals_plugin"
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "signals_plugin"
+
+[tool.uv.sources]
+the-black-goat = { workspace = true }

@@ -26,6 +26,11 @@ dev = [
     "absurdctl>=0.3.0",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
+    "the-black-goat-facts",
+    "the-black-goat-daily-brief",
+    "the-black-goat-google-calendar",
+    "the-black-goat-signals",
+    "the-black-goat-slack",
     "the-black-goat-stdlib",
     "the-black-goat-memory",
 ]
@@ -36,3 +41,8 @@ members = ["the-thousand-young/*"]
 [tool.uv.sources]
 the-black-goat-stdlib = { workspace = true }
 the-black-goat-memory = { workspace = true }
+the-black-goat-facts = { workspace = true }
+the-black-goat-daily-brief = { workspace = true }
+the-black-goat-google-calendar = { workspace = true }
+the-black-goat-signals = { workspace = true }
+the-black-goat-slack = { workspace = true }

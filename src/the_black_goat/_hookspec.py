@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import pluggy
 
+from the_black_goat.operations import (
+    RoutineDefinition,
+    SignalDefinition,
+    SourceDefinition,
+)
 from the_black_goat.scheduling import Schedule
 from the_black_goat.tools import ToolDef
 
@@ -32,4 +37,28 @@ class GoatHooks:
         cron expression + default input. The registry validates that the
         target tool exists at build time and prefixes each Schedule's `name`
         with the registering plugin's project-name.
+        """
+
+    @hookspec
+    def goat_register_sources(self) -> list[SourceDefinition]:
+        """Return external source definitions this plugin contributes.
+
+        Sources describe external accounts, feeds, or systems that tools may
+        ingest from. They are prefixed with the registering plugin's name.
+        """
+
+    @hookspec
+    def goat_register_signal_definitions(self) -> list[SignalDefinition]:
+        """Return signal recipes this plugin contributes.
+
+        Signal definitions are recipes for generating user-facing signals from
+        facts and state. They are prefixed with the registering plugin's name.
+        """
+
+    @hookspec
+    def goat_register_routines(self) -> list[RoutineDefinition]:
+        """Return routine definitions this plugin contributes.
+
+        Routines compose facts/signals into artifacts and optional delivery
+        side effects. They are prefixed with the registering plugin's name.
         """

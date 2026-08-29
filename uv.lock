@@ -5,7 +5,12 @@ requires-python = ">=3.13"
 [manifest]
 members = [
     "the-black-goat",
+    "the-black-goat-daily-brief",
+    "the-black-goat-facts",
+    "the-black-goat-google-calendar",
     "the-black-goat-memory",
+    "the-black-goat-signals",
+    "the-black-goat-slack",
     "the-black-goat-stdlib",
 ]
 
@@ -2110,7 +2115,12 @@ dev = [
     { name = "absurdctl" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "the-black-goat-daily-brief" },
+    { name = "the-black-goat-facts" },
+    { name = "the-black-goat-google-calendar" },
     { name = "the-black-goat-memory" },
+    { name = "the-black-goat-signals" },
+    { name = "the-black-goat-slack" },
     { name = "the-black-goat-stdlib" },
 ]
 
@@ -2130,8 +2140,60 @@ dev = [
     { name = "absurdctl", specifier = ">=0.3.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
+    { name = "the-black-goat-daily-brief", editable = "the-thousand-young/the-black-goat-daily-brief" },
+    { name = "the-black-goat-facts", editable = "the-thousand-young/the-black-goat-facts" },
+    { name = "the-black-goat-google-calendar", editable = "the-thousand-young/the-black-goat-google-calendar" },
     { name = "the-black-goat-memory", editable = "the-thousand-young/the-black-goat-memory" },
+    { name = "the-black-goat-signals", editable = "the-thousand-young/the-black-goat-signals" },
+    { name = "the-black-goat-slack", editable = "the-thousand-young/the-black-goat-slack" },
     { name = "the-black-goat-stdlib", editable = "the-thousand-young/the-black-goat-stdlib" },
+]
+
+[[package]]
+name = "the-black-goat-daily-brief"
+version = "0.1.0"
+source = { editable = "the-thousand-young/the-black-goat-daily-brief" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "the-black-goat" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.13.3" },
+    { name = "the-black-goat", editable = "." },
+]
+
+[[package]]
+name = "the-black-goat-facts"
+version = "0.1.0"
+source = { editable = "the-thousand-young/the-black-goat-facts" }
+dependencies = [
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic" },
+    { name = "the-black-goat" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.0.0" },
+    { name = "pydantic", specifier = ">=2.13.3" },
+    { name = "the-black-goat", editable = "." },
+]
+
+[[package]]
+name = "the-black-goat-google-calendar"
+version = "0.1.0"
+source = { editable = "the-thousand-young/the-black-goat-google-calendar" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "the-black-goat" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.13.3" },
+    { name = "the-black-goat", editable = "." },
 ]
 
 [[package]]
@@ -2147,6 +2209,36 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.0.0" },
+    { name = "pydantic", specifier = ">=2.13.3" },
+    { name = "the-black-goat", editable = "." },
+]
+
+[[package]]
+name = "the-black-goat-signals"
+version = "0.1.0"
+source = { editable = "the-thousand-young/the-black-goat-signals" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "the-black-goat" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.13.3" },
+    { name = "the-black-goat", editable = "." },
+]
+
+[[package]]
+name = "the-black-goat-slack"
+version = "0.1.0"
+source = { editable = "the-thousand-young/the-black-goat-slack" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "the-black-goat" },
+]
+
+[package.metadata]
+requires-dist = [
     { name = "pydantic", specifier = ">=2.13.3" },
     { name = "the-black-goat", editable = "." },
 ]

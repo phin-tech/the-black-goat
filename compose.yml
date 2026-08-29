@@ -20,6 +20,8 @@ services:
       - "shared_preload_libraries=pg_cron"
       - "-c"
       - "cron.database_name=absurd"
+      - "-c"
+      - "cron.timezone=America/New_York"
     ports:
       - "5432:5432"
     volumes:

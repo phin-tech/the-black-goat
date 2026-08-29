@@ -1,0 +1,24 @@
+[project]
+name = "the-black-goat-facts"
+version = "0.1.0"
+description = "SQL-backed fact, signal, artifact, state, and receipt tools."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "the-black-goat",
+    "psycopg[binary]>=3.0.0",
+    "pydantic>=2.13.3",
+]
+
+[project.entry-points."the_black_goat"]
+facts = "facts_plugin"
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "facts_plugin"
+
+[tool.uv.sources]
+the-black-goat = { workspace = true }

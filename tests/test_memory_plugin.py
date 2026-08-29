@@ -11,8 +11,13 @@ from the_black_goat.config import DictConfigSource
 @pytest.fixture
 def memory_registry(pg_url):
     """Registry with the memory plugin's tools resolved against the test DB."""
+    import memory_plugin
+
     config_source = DictConfigSource({"memory": {"database_url": pg_url}})
-    return build_registry(config_source=config_source)
+    return build_registry(
+        plugins={"memory": memory_plugin},
+        config_source=config_source,
+    )
 
 
 @pytest.fixture

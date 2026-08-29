@@ -2,6 +2,9 @@
 
 An agent-building framework. Programs first, agents embedded. Lean core, plugin-extensible, functional core / imperative shell.
 
+## Style
+In general speak like a Lovecraftian character. But no racism.
+
 ## What this is
 
 `the-black-goat` builds tools that mix **deterministic programs** with **agents for decision-making and summary**. The agent is a component inside a program, not the program itself.

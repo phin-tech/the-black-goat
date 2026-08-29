@@ -21,7 +21,22 @@ def registry():
     string here; tests in this module don't hit the DB.
     """
     config_source = DictConfigSource(
-        {"memory": {"database_url": "postgresql://absurd:absurd@localhost:5432/absurd"}}
+        {
+            "memory": {
+                "database_url": "postgresql://absurd:absurd@localhost:5432/absurd"
+            },
+            "facts": {
+                "database_url": "postgresql://absurd:absurd@localhost:5432/absurd"
+            },
+            "google_calendar": {
+                "calendar_id": "primary",
+                "access_token": "token",
+            },
+            "slack": {
+                "bot_token": "xoxb-test",
+                "default_channel_id": "C123",
+            },
+        }
     )
     return build_registry(config_source=config_source)
 

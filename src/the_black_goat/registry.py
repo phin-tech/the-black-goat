@@ -15,6 +15,11 @@ from the_black_goat.errors import (
     ToolKindMismatch,
     ToolNotFound,
 )
+from the_black_goat.operations import (
+    RoutineDefinition,
+    SignalDefinition,
+    SourceDefinition,
+)
 from the_black_goat.scheduling import Schedule
 from the_black_goat.tools import ToolDef
 
@@ -29,11 +34,19 @@ class Registry:
         absurd: Any = None,
         configs: Mapping[str, BaseModel] | None = None,
         schedules: Mapping[str, Schedule] | None = None,
+        sources: Mapping[str, SourceDefinition] | None = None,
+        signal_definitions: Mapping[str, SignalDefinition] | None = None,
+        routines: Mapping[str, RoutineDefinition] | None = None,
     ) -> None:
         self._tools: dict[str, ToolDef] = dict(tools)
         self._absurd = absurd
         self._configs: dict[str, BaseModel] = dict(configs or {})
         self._schedules: dict[str, Schedule] = dict(schedules or {})
+        self._sources: dict[str, SourceDefinition] = dict(sources or {})
+        self._signal_definitions: dict[str, SignalDefinition] = dict(
+            signal_definitions or {}
+        )
+        self._routines: dict[str, RoutineDefinition] = dict(routines or {})
 
     def list(self) -> list[ToolDef]:
         return list(self._tools.values())
@@ -58,6 +71,37 @@ class Registry:
 
     def schedules_by_plugin(self, plugin: str) -> list[Schedule]:
         return [s for s in self._schedules.values() if s.plugin == plugin]
+
+    def sources(self) -> list[SourceDefinition]:
+        return list(self._sources.values())
+
+    def source(self, qualified_name: str) -> SourceDefinition:
+        return self._sources[qualified_name]
+
+    def sources_by_plugin(self, plugin: str) -> list[SourceDefinition]:
+        return [s for s in self._sources.values() if s.plugin == plugin]
+
+    def signal_definitions(self) -> list[SignalDefinition]:
+        return list(self._signal_definitions.values())
+
+    def signal_definition(self, qualified_name: str) -> SignalDefinition:
+        return self._signal_definitions[qualified_name]
+
+    def signal_definitions_by_plugin(
+        self, plugin: str
+    ) -> list[SignalDefinition]:
+        return [
+            s for s in self._signal_definitions.values() if s.plugin == plugin
+        ]
+
+    def routines(self) -> list[RoutineDefinition]:
+        return list(self._routines.values())
+
+    def routine(self, qualified_name: str) -> RoutineDefinition:
+        return self._routines[qualified_name]
+
+    def routines_by_plugin(self, plugin: str) -> list[RoutineDefinition]:
+        return [r for r in self._routines.values() if r.plugin == plugin]
 
     def __getattr__(self, name: str) -> "_PluginProxy":
         # __getattr__ only fires when normal attribute lookup fails, so
@@ -303,11 +347,54 @@ def build_registry(
                 )
             schedules_by_qname[sqname] = prefixed_sched
 
+    sources_by_qname: dict[str, SourceDefinition] = {}
+    for hookimpl_obj in pm.hook.goat_register_sources.get_hookimpls():
+        plugin_name = hookimpl_obj.plugin_name
+        plugin_obj = hookimpl_obj.plugin
+        method = getattr(plugin_obj, "goat_register_sources")
+        for source in method():
+            prefixed_source = source.model_copy(update={"plugin": plugin_name})
+            qname = prefixed_source.qualified_name
+            if qname in sources_by_qname:
+                raise ValueError(f"duplicate source name: {qname!r}")
+            sources_by_qname[qname] = prefixed_source
+
+    signals_by_qname: dict[str, SignalDefinition] = {}
+    for hookimpl_obj in (
+        pm.hook.goat_register_signal_definitions.get_hookimpls()
+    ):
+        plugin_name = hookimpl_obj.plugin_name
+        plugin_obj = hookimpl_obj.plugin
+        method = getattr(plugin_obj, "goat_register_signal_definitions")
+        for signal in method():
+            prefixed_signal = signal.model_copy(update={"plugin": plugin_name})
+            qname = prefixed_signal.qualified_name
+            if qname in signals_by_qname:
+                raise ValueError(f"duplicate signal definition name: {qname!r}")
+            signals_by_qname[qname] = prefixed_signal
+
+    routines_by_qname: dict[str, RoutineDefinition] = {}
+    for hookimpl_obj in pm.hook.goat_register_routines.get_hookimpls():
+        plugin_name = hookimpl_obj.plugin_name
+        plugin_obj = hookimpl_obj.plugin
+        method = getattr(plugin_obj, "goat_register_routines")
+        for routine in method():
+            prefixed_routine = routine.model_copy(
+                update={"plugin": plugin_name}
+            )
+            qname = prefixed_routine.qualified_name
+            if qname in routines_by_qname:
+                raise ValueError(f"duplicate routine name: {qname!r}")
+            routines_by_qname[qname] = prefixed_routine
+
     registry = Registry(
         tools_by_qname,
         absurd=absurd,
         configs=configs_by_qname,
         schedules=schedules_by_qname,
+        sources=sources_by_qname,
+        signal_definitions=signals_by_qname,
+        routines=routines_by_qname,
     )
 
     if absurd is not None:
