@@ -1,0 +1,12 @@
+# Postgres 17 + pg_cron with the goat_memory / absurd / pg_cron schema baked in.
+# The db/*.sql files auto-apply (alphabetically) the first time the data volume
+# is initialised, so a fresh deploy comes up with the full schema. pg_cron is
+# still enabled at runtime via shared_preload_libraries + cron.database_name in
+# the compose command block.
+FROM postgres:17
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends postgresql-17-cron \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY db/ /docker-entrypoint-initdb.d/

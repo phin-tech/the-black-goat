@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS goat_memory.facts (
   source_account  text         NOT NULL DEFAULT '',
   external_id     text         NOT NULL,
   subject         text         NOT NULL,
+  person          text,
   title           text,
   body            text,
   status          text,
@@ -49,8 +50,40 @@ CREATE INDEX IF NOT EXISTS facts_observed_at_idx
   ON goat_memory.facts (observed_at);
 CREATE INDEX IF NOT EXISTS facts_source_idx
   ON goat_memory.facts (source_plugin, source_account);
+CREATE INDEX IF NOT EXISTS facts_person_idx
+  ON goat_memory.facts (person);
 CREATE INDEX IF NOT EXISTS facts_payload_gin_idx
   ON goat_memory.facts USING gin (payload);
+
+-- Fact definitions: a source declaring which fact types it produces.
+-- Metadata only (discovery / labels / contract); does not gate ingest.
+CREATE TABLE IF NOT EXISTS goat_memory.fact_definitions (
+  id              uuid         PRIMARY KEY,
+  source_plugin   text         NOT NULL,
+  type            text         NOT NULL,
+  domain          text         NOT NULL,
+  title           text         NOT NULL DEFAULT '',
+  description     text         NOT NULL DEFAULT '',
+  payload_schema  jsonb        NOT NULL DEFAULT '{}'::jsonb,
+  tags            text[]       NOT NULL DEFAULT '{}',
+  enabled         boolean      NOT NULL DEFAULT true,
+  inserted_at     timestamptz  NOT NULL DEFAULT now(),
+  updated_at      timestamptz  NOT NULL DEFAULT now(),
+  UNIQUE (source_plugin, type)
+);
+CREATE INDEX IF NOT EXISTS fact_definitions_domain_idx
+  ON goat_memory.fact_definitions (domain);
+
+-- People: a shared, cross-source namespace. A fact's `person` handle points
+-- here for a display name and metadata; not source-owned, no FK enforcement.
+CREATE TABLE IF NOT EXISTS goat_memory.people (
+  handle          text         PRIMARY KEY,
+  display_name    text         NOT NULL DEFAULT '',
+  tags            text[]       NOT NULL DEFAULT '{}',
+  payload         jsonb        NOT NULL DEFAULT '{}'::jsonb,
+  inserted_at     timestamptz  NOT NULL DEFAULT now(),
+  updated_at      timestamptz  NOT NULL DEFAULT now()
+);
 
 CREATE TABLE IF NOT EXISTS goat_memory.signal_definitions (
   id                uuid         PRIMARY KEY,

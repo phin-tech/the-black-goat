@@ -1,0 +1,26 @@
+[project]
+name = "the-black-goat-ingest"
+version = "0.1.0"
+description = "Token-authenticated HTTP edge for pushing facts into the store."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "the-black-goat",
+    "the-black-goat-facts",
+    "absurd-sdk",
+    "pydantic>=2.13.3",
+]
+
+[project.scripts]
+the-black-goat-ingest = "ingest_service.server:main"
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "ingest_service"
+
+[tool.uv.sources]
+the-black-goat = { workspace = true }
+the-black-goat-facts = { workspace = true }

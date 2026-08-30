@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 the-black-goat = "the_black_goat:main"
+the-black-goat-worker = "the_black_goat.worker:main"
 
 [build-system]
 requires = ["uv_build>=0.11.7,<0.12.0"]
@@ -31,6 +32,20 @@ dev = [
     "the-black-goat-google-calendar",
     "the-black-goat-signals",
     "the-black-goat-slack",
+    "the-black-goat-ingest",
+    "the-black-goat-stdlib",
+    "the-black-goat-memory",
+]
+
+# Plugins/services installed in the deployed image. Deliberately excludes
+# the-black-goat-google-calendar (no calendar sync deployed yet, and its config
+# would otherwise be required at registry-build time in the worker).
+deploy = [
+    "the-black-goat-facts",
+    "the-black-goat-daily-brief",
+    "the-black-goat-signals",
+    "the-black-goat-slack",
+    "the-black-goat-ingest",
     "the-black-goat-stdlib",
     "the-black-goat-memory",
 ]
@@ -46,3 +61,4 @@ the-black-goat-daily-brief = { workspace = true }
 the-black-goat-google-calendar = { workspace = true }
 the-black-goat-signals = { workspace = true }
 the-black-goat-slack = { workspace = true }
+the-black-goat-ingest = { workspace = true }

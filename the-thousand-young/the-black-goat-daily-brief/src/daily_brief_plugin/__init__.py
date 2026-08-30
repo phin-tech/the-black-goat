@@ -40,7 +40,7 @@ def generate(input: DailyBriefGenerateInput) -> DailyBriefGenerateOutput:
     )
     end = start + timedelta(days=1)
 
-    facts_result = registry.invoke(
+    calendar_facts = registry.invoke(
         "facts.query",
         {
             "domain": "calendar",
@@ -49,17 +49,28 @@ def generate(input: DailyBriefGenerateInput) -> DailyBriefGenerateOutput:
             "starts_until": end.isoformat(),
             "limit": 100,
         },
-    )
-    signals_result = registry.invoke(
-        "facts.signals_query",
+    ).get("facts", [])
+    # Homework due today that is not yet done (status projected each sync by the
+    # source). Homework facts carry `date` = due date and a `person` handle.
+    homework_facts = registry.invoke(
+        "facts.query",
         {
-            "status": "active",
-            "limit": 100,
+            "domain": "homework",
+            "date": brief_date.isoformat(),
+            "status": "todo",
+            "limit": 200,
         },
+    ).get("facts", [])
+    signals = registry.invoke(
+        "facts.signals_query",
+        {"status": "active", "limit": 100},
+    ).get("signals", [])
+
+    people_names = _people_names(registry)
+    facts = calendar_facts + homework_facts
+    body = _render_brief(
+        brief_date, calendar_facts, homework_facts, signals, people_names
     )
-    facts = facts_result.get("facts", [])
-    signals = signals_result.get("signals", [])
-    body = _render_brief(brief_date, facts, signals)
     artifact = registry.invoke(
         "facts.artifact_put",
         {
@@ -72,7 +83,8 @@ def generate(input: DailyBriefGenerateInput) -> DailyBriefGenerateOutput:
             "signal_ids": [s["id"] for s in signals if s.get("id")],
             "payload": {
                 "timezone": input.timezone,
-                "facts_count": len(facts),
+                "calendar_count": len(calendar_facts),
+                "homework_count": len(homework_facts),
                 "signals_count": len(signals),
             },
         },
@@ -92,7 +104,27 @@ def generate(input: DailyBriefGenerateInput) -> DailyBriefGenerateOutput:
     )
 
 
-def _render_brief(brief_date: Date, facts: list[dict], signals: list[dict]) -> str:
+def _people_names(registry) -> dict[str, str]:
+    """handle -> display name, best-effort (empty if the people table is unset)."""
+    try:
+        result = registry.invoke("facts.people_query", {"limit": 1000})
+    except Exception:
+        return {}
+    names: dict[str, str] = {}
+    for person in result.get("people", []):
+        handle = person.get("handle")
+        if handle:
+            names[handle] = person.get("display_name") or handle
+    return names
+
+
+def _render_brief(
+    brief_date: Date,
+    calendar_facts: list[dict],
+    homework_facts: list[dict],
+    signals: list[dict],
+    people_names: dict[str, str],
+) -> str:
     lines = [f"Daily brief for {brief_date.isoformat()}"]
     if signals:
         lines.append("")
@@ -101,16 +133,36 @@ def _render_brief(brief_date: Date, facts: list[dict], signals: list[dict]) -> s
             summary = signal.get("summary")
             suffix = f": {summary}" if summary else ""
             lines.append(f"- {signal.get('title', 'Untitled signal')}{suffix}")
-    if facts:
+    if calendar_facts:
         lines.append("")
         lines.append("Calendar")
-        for fact in facts:
+        for fact in calendar_facts:
             starts_at = fact.get("starts_at")
             time_label = f"{starts_at} - " if starts_at else ""
             lines.append(f"- {time_label}{fact.get('title', 'Untitled event')}")
-    if not facts and not signals:
+    if homework_facts:
         lines.append("")
-        lines.append("No calendar events or active signals found.")
+        lines.append("Homework due today")
+        # Group by person so the brief reads "Adam" / "Maya", not a flat list.
+        by_person: dict[str, list[dict]] = {}
+        for fact in homework_facts:
+            handle = fact.get("person") or ""
+            by_person.setdefault(handle, []).append(fact)
+
+        def _label(handle: str) -> str:
+            if not handle:
+                return "Unassigned"
+            return people_names.get(handle, handle)
+
+        for handle in sorted(by_person, key=lambda h: _label(h).lower()):
+            lines.append(f"  {_label(handle)}")
+            for fact in by_person[handle]:
+                klass = (fact.get("payload") or {}).get("class")
+                suffix = f" ({klass})" if klass else ""
+                lines.append(f"  - {fact.get('title', 'Untitled assignment')}{suffix}")
+    if not calendar_facts and not homework_facts and not signals:
+        lines.append("")
+        lines.append("No events, homework, or active signals found.")
     return "\n".join(lines)
 
 
@@ -130,7 +182,7 @@ _ROUTINE = RoutineDefinition(
     desc="Generate and deliver the daily brief.",
     schedule="30 7 * * *",
     timezone=DEFAULT_TIMEZONE,
-    fact_query={"domain": "calendar", "date": "today"},
+    fact_query={"date": "today"},
     signal_query={"status": "active"},
     output_artifact_type="daily_brief",
     delivery_tool="slack.send_artifact",

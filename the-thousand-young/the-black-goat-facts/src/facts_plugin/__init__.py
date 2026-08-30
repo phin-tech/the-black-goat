@@ -135,6 +135,42 @@ _SIGNAL_DISMISS = _tool(
     tags=("signals", "memory"),
 )
 
+_DEFINE = _tool(
+    "define",
+    _tools.define,
+    _tools.FactDefinitionPutInput,
+    _tools.FactDefinitionPutOutput,
+    side_effect="writes_external",
+    tags=("definitions", "memory"),
+)
+
+_DEFINITIONS_QUERY = _tool(
+    "definitions_query",
+    _tools.definitions_query,
+    _tools.FactDefinitionsQueryInput,
+    _tools.FactDefinitionsQueryOutput,
+    side_effect="reads_external",
+    tags=("definitions", "memory"),
+)
+
+_PEOPLE_PUT = _tool(
+    "people_put",
+    _tools.people_put,
+    _tools.PersonPutInput,
+    _tools.PersonPutOutput,
+    side_effect="writes_external",
+    tags=("people", "memory"),
+)
+
+_PEOPLE_QUERY = _tool(
+    "people_query",
+    _tools.people_query,
+    _tools.PeopleQueryInput,
+    _tools.PeopleQueryOutput,
+    side_effect="reads_external",
+    tags=("people", "memory"),
+)
+
 
 @hookimpl
 def goat_register_tools() -> list[ToolDef]:
@@ -152,4 +188,8 @@ def goat_register_tools() -> list[ToolDef]:
         _SIGNAL_PUT,
         _SIGNALS_QUERY,
         _SIGNAL_DISMISS,
+        _DEFINE,
+        _DEFINITIONS_QUERY,
+        _PEOPLE_PUT,
+        _PEOPLE_QUERY,
     ]

@@ -22,6 +22,7 @@ class FactRecord(BaseModel):
     source_account: str
     external_id: str
     subject: str
+    person: str | None = None
     title: str | None = None
     body: str | None = None
     status: str | None = None
@@ -57,6 +58,7 @@ class FactUpsertInput(BaseModel):
     source_account: str = ""
     external_id: str = Field(min_length=1)
     subject: str = Field(min_length=1)
+    person: str | None = None
     title: str | None = None
     body: str | None = None
     status: str | None = None
@@ -88,15 +90,15 @@ def upsert(input: FactUpsertInput, *, config: FactsConfig) -> FactUpsertOutput:
                 """
                 INSERT INTO goat_memory.facts (
                   id, domain, type, source_plugin, source_account,
-                  external_id, subject, title, body, status, date, starts_at,
-                  ends_at, due_at, observed_at, valid_from, valid_until,
-                  payload, schema_version, deleted_at
+                  external_id, subject, person, title, body, status, date,
+                  starts_at, ends_at, due_at, observed_at, valid_from,
+                  valid_until, payload, schema_version, deleted_at
                 )
                 VALUES (
                   %s, %s, %s, %s, %s,
                   %s, %s, %s, %s, %s, %s, %s,
                   %s, %s, %s, %s, %s,
-                  %s, %s, %s
+                  %s, %s, %s, %s
                 )
                 ON CONFLICT (
                   source_plugin, source_account, external_id, type
@@ -104,6 +106,7 @@ def upsert(input: FactUpsertInput, *, config: FactsConfig) -> FactUpsertOutput:
                 DO UPDATE SET
                   domain = EXCLUDED.domain,
                   subject = EXCLUDED.subject,
+                  person = EXCLUDED.person,
                   title = EXCLUDED.title,
                   body = EXCLUDED.body,
                   status = EXCLUDED.status,
@@ -128,6 +131,7 @@ def upsert(input: FactUpsertInput, *, config: FactsConfig) -> FactUpsertOutput:
                     input.source_account,
                     input.external_id,
                     input.subject,
+                    input.person,
                     input.title,
                     input.body,
                     input.status,
@@ -176,6 +180,7 @@ class FactQueryInput(BaseModel):
     type: str | None = None
     source_plugin: str | None = None
     source_account: str | None = None
+    person: str | None = None
     date: Date | None = None
     starts_from: DateTime | None = None
     starts_until: DateTime | None = None
@@ -202,6 +207,7 @@ def query(input: FactQueryInput, *, config: FactsConfig) -> FactQueryOutput:
         "type",
         "source_plugin",
         "source_account",
+        "person",
         "date",
         "status",
     ):
@@ -786,3 +792,218 @@ def signal_dismiss(
         status=row["status"],
         updated_at=row["updated_at"],
     )
+
+
+class FactDefinitionRecord(BaseModel):
+    id: str
+    source_plugin: str
+    type: str
+    domain: str
+    title: str
+    description: str
+    payload_schema: dict[str, Any]
+    tags: list[str]
+    enabled: bool
+    inserted_at: DateTime
+    updated_at: DateTime
+
+
+def _definition_from_row(row: dict[str, Any]) -> FactDefinitionRecord:
+    data = dict(row)
+    data["id"] = str(data["id"])
+    return FactDefinitionRecord.model_validate(data)
+
+
+class FactDefinitionPutInput(BaseModel):
+    id: uuid.UUID | None = None
+    source_plugin: str = Field(min_length=1)
+    type: str = Field(min_length=1)
+    domain: str = Field(min_length=1)
+    title: str = ""
+    description: str = ""
+    payload_schema: dict[str, Any] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    enabled: bool = True
+
+
+class FactDefinitionPutOutput(BaseModel):
+    id: str
+    inserted_at: DateTime
+    updated_at: DateTime
+
+
+def define(
+    input: FactDefinitionPutInput, *, config: FactsConfig
+) -> FactDefinitionPutOutput:
+    definition_id = input.id or uuid.uuid4()
+    with _connect(config) as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                INSERT INTO goat_memory.fact_definitions (
+                  id, source_plugin, type, domain, title, description,
+                  payload_schema, tags, enabled
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (source_plugin, type)
+                DO UPDATE SET
+                  domain = EXCLUDED.domain,
+                  title = EXCLUDED.title,
+                  description = EXCLUDED.description,
+                  payload_schema = EXCLUDED.payload_schema,
+                  tags = EXCLUDED.tags,
+                  enabled = EXCLUDED.enabled,
+                  updated_at = now()
+                RETURNING id, inserted_at, updated_at
+                """,
+                (
+                    definition_id,
+                    input.source_plugin,
+                    input.type,
+                    input.domain,
+                    input.title,
+                    input.description,
+                    Jsonb(input.payload_schema),
+                    input.tags,
+                    input.enabled,
+                ),
+            )
+            row = cur.fetchone()
+            assert row is not None
+    return FactDefinitionPutOutput(
+        id=str(row["id"]),
+        inserted_at=row["inserted_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+class FactDefinitionsQueryInput(BaseModel):
+    source_plugin: str | None = None
+    domain: str | None = None
+    type: str | None = None
+    enabled: bool | None = None
+    limit: int = Field(default=100, ge=1, le=10_000)
+
+
+class FactDefinitionsQueryOutput(BaseModel):
+    definitions: list[FactDefinitionRecord]
+
+
+def definitions_query(
+    input: FactDefinitionsQueryInput, *, config: FactsConfig
+) -> FactDefinitionsQueryOutput:
+    clauses: list[str] = []
+    params: list[Any] = []
+    for field in ("source_plugin", "domain", "type", "enabled"):
+        value = getattr(input, field)
+        if value is not None:
+            clauses.append(f"{field} = %s")
+            params.append(value)
+    where = " WHERE " + " AND ".join(clauses) if clauses else ""
+    params.append(input.limit)
+    with _connect(config) as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                f"""
+                SELECT * FROM goat_memory.fact_definitions
+                {where}
+                ORDER BY source_plugin, type
+                LIMIT %s
+                """,
+                params,
+            )
+            rows = cur.fetchall()
+    return FactDefinitionsQueryOutput(
+        definitions=[_definition_from_row(row) for row in rows]
+    )
+
+
+class PersonRecord(BaseModel):
+    handle: str
+    display_name: str
+    tags: list[str]
+    payload: dict[str, Any]
+    inserted_at: DateTime
+    updated_at: DateTime
+
+
+class PersonPutInput(BaseModel):
+    handle: str = Field(min_length=1)
+    display_name: str = ""
+    tags: list[str] = Field(default_factory=list)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class PersonPutOutput(BaseModel):
+    handle: str
+    inserted_at: DateTime
+    updated_at: DateTime
+
+
+def people_put(
+    input: PersonPutInput, *, config: FactsConfig
+) -> PersonPutOutput:
+    with _connect(config) as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                INSERT INTO goat_memory.people (
+                  handle, display_name, tags, payload
+                )
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (handle)
+                DO UPDATE SET
+                  display_name = EXCLUDED.display_name,
+                  tags = EXCLUDED.tags,
+                  payload = EXCLUDED.payload,
+                  updated_at = now()
+                RETURNING handle, inserted_at, updated_at
+                """,
+                (
+                    input.handle,
+                    input.display_name,
+                    input.tags,
+                    Jsonb(input.payload),
+                ),
+            )
+            row = cur.fetchone()
+            assert row is not None
+    return PersonPutOutput(
+        handle=row["handle"],
+        inserted_at=row["inserted_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+class PeopleQueryInput(BaseModel):
+    handle: str | None = None
+    limit: int = Field(default=100, ge=1, le=10_000)
+
+
+class PeopleQueryOutput(BaseModel):
+    people: list[PersonRecord]
+
+
+def people_query(
+    input: PeopleQueryInput, *, config: FactsConfig
+) -> PeopleQueryOutput:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if input.handle is not None:
+        clauses.append("handle = %s")
+        params.append(input.handle)
+    where = " WHERE " + " AND ".join(clauses) if clauses else ""
+    params.append(input.limit)
+    with _connect(config) as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                f"""
+                SELECT * FROM goat_memory.people
+                {where}
+                ORDER BY handle
+                LIMIT %s
+                """,
+                params,
+            )
+            rows = cur.fetchall()
+    return PeopleQueryOutput(people=[PersonRecord.model_validate(r) for r in rows])

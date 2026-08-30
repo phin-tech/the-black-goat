@@ -11,6 +11,7 @@ from the_black_goat import ToolDef, build_registry, hookimpl, tool
 class _FactsQueryInput(BaseModel):
     domain: str | None = None
     date: str | None = None
+    status: str | None = None
     starts_from: str | None = None
     starts_until: str | None = None
     limit: int = 100
@@ -18,6 +19,15 @@ class _FactsQueryInput(BaseModel):
 
 class _FactsQueryOutput(BaseModel):
     facts: list[dict[str, Any]]
+
+
+class _PeopleQueryInput(BaseModel):
+    handle: str | None = None
+    limit: int = 100
+
+
+class _PeopleQueryOutput(BaseModel):
+    people: list[dict[str, Any]]
 
 
 class _SignalsQueryInput(BaseModel):
@@ -98,11 +108,17 @@ class TestDailyBriefGenerate:
         artifact_inputs: list[dict[str, Any]] = []
         sent: list[str] = []
 
-        fact = {
+        cal_fact = {
             "id": str(uuid.uuid4()),
             "title": "Design review",
             "starts_at": "2026-05-24T13:00:00-04:00",
             "ends_at": "2026-05-24T14:00:00-04:00",
+        }
+        hw_fact = {
+            "id": str(uuid.uuid4()),
+            "title": "Read chapter 3",
+            "person": "adam",
+            "payload": {"class": "Biology"},
         }
         signal = {
             "id": str(uuid.uuid4()),
@@ -113,11 +129,19 @@ class TestDailyBriefGenerate:
 
         def facts_query(input: _FactsQueryInput) -> _FactsQueryOutput:
             calls.append("facts.query")
-            return _FactsQueryOutput(facts=[fact])
+            if input.domain == "homework":
+                return _FactsQueryOutput(facts=[hw_fact])
+            return _FactsQueryOutput(facts=[cal_fact])
 
         def signals_query(input: _SignalsQueryInput) -> _SignalsQueryOutput:
             calls.append("facts.signals_query")
             return _SignalsQueryOutput(signals=[signal])
+
+        def people_query(input: _PeopleQueryInput) -> _PeopleQueryOutput:
+            calls.append("facts.people_query")
+            return _PeopleQueryOutput(
+                people=[{"handle": "adam", "display_name": "Adam"}]
+            )
 
         def artifact_put(input: _ArtifactPutInput) -> _ArtifactPutOutput:
             calls.append("facts.artifact_put")
@@ -151,6 +175,12 @@ class TestDailyBriefGenerate:
                         output=_SignalsQueryOutput,
                     ),
                     tool(
+                        name="people_query",
+                        func=people_query,
+                        input=_PeopleQueryInput,
+                        output=_PeopleQueryOutput,
+                    ),
+                    tool(
                         name="artifact_put",
                         func=artifact_put,
                         input=_ArtifactPutInput,
@@ -176,16 +206,24 @@ class TestDailyBriefGenerate:
 
         assert calls == [
             "facts.query",
+            "facts.query",
             "facts.signals_query",
+            "facts.people_query",
             "facts.artifact_put",
             "slack.send_artifact",
         ]
         assert artifact_inputs[0]["type"] == "daily_brief"
         assert artifact_inputs[0]["date"] == "2026-05-24"
-        assert artifact_inputs[0]["fact_ids"] == [fact["id"]]
+        assert artifact_inputs[0]["fact_ids"] == [cal_fact["id"], hw_fact["id"]]
         assert artifact_inputs[0]["signal_ids"] == [signal["id"]]
-        assert "Design review" in artifact_inputs[0]["body"]
-        assert "Prep for design review" in artifact_inputs[0]["body"]
+        body = artifact_inputs[0]["body"]
+        assert "Design review" in body
+        assert "Prep for design review" in body
+        # Homework surfaces, grouped under the person's display name.
+        assert "Homework due today" in body
+        assert "Adam" in body
+        assert "Read chapter 3" in body
+        assert "Biology" in body
         assert sent == [str(artifact_id)]
         assert result == {
             "artifact_id": str(artifact_id),
