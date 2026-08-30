@@ -37,17 +37,15 @@ dev = [
     "the-black-goat-memory",
 ]
 
-# Plugins/services installed in the deployed image. Deliberately excludes
-# the-black-goat-google-calendar (no calendar sync deployed yet, and its config
-# would otherwise be required at registry-build time in the worker).
+# Plugins/services installed in the deployed image — the minimal set for the
+# ingest edge + the worker-run daily brief (deliver=false for now). Excludes:
+# google-calendar (no calendar sync yet), slack (delivery deferred until the
+# bot token is on luigi), and signals/stdlib/memory (unused by this path) — each
+# omitted so its config isn't required at registry-build time in the worker.
 deploy = [
     "the-black-goat-facts",
     "the-black-goat-daily-brief",
-    "the-black-goat-signals",
-    "the-black-goat-slack",
     "the-black-goat-ingest",
-    "the-black-goat-stdlib",
-    "the-black-goat-memory",
 ]
 
 [tool.uv.workspace]
